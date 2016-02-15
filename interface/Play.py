@@ -4,15 +4,15 @@ from go import GameState
 
 class play_match(object):
     """docstring for ClassName"""
-    def __init__(self, player1, player2, save_dir):
+    def __init__(self, player1, player2, save_dir, size=19):
         # super(ClassName, self).__init__()
         self.player1 = player1
         self.player2 = player2
-        self.state = GameState(save_dir)
+        self.state = GameState(save_dir, size=size)
         # I Propose that GameState should take a top-level save directory,
         # then automatically generate the specific file name
 
-    def play_(self, player):
+    def _play(self, player):
         move = player.get_move(self.state)
         end_of_game = self.state.do_move(move)
         self.state.write_to_disk()
@@ -20,9 +20,9 @@ class play_match(object):
 
     def play(self):
         """Play one move of match, update game state, save to disk"""
-        end_of_game = self.play_(self.player1)
+        end_of_game = self._play(self.player1)
         if not end_of_game:
-            end_of_game = self.play_(self.player2)
+            end_of_game = self._play(self.player2)
         return end_of_game
 
 
