@@ -3,7 +3,7 @@ from go import GameState
 
 
 class play_match(object):
-    """docstring for ClassName"""
+    """Interface to handle play between two players."""
     def __init__(self, player1, player2, save_dir, size=19):
         # super(ClassName, self).__init__()
         self.player1 = player1
@@ -19,21 +19,20 @@ class play_match(object):
         return end_of_game
 
     def play(self):
-        """Play one move of match, update game state, save to disk"""
+        """Play one turn for each player, update game state, save to disk"""
         end_of_game = self._play(self.player1)
         if not end_of_game:
             end_of_game = self._play(self.player2)
         return end_of_game
 
 
+########### Example implementation #####################›
+from Play import play_match
 
-########### Example implementation #####################
-# from Play import play_match
-#
-#
-# save_dir = 'path/to/game_state/save_dir'
-# match = play_match(alphago, pachi, save_dir)
-# while True:
-#     end_of_game = match.play()
-#     if end_of_game:
-#         break
+
+save_dir = 'path/to/game_state/save_dir'
+match = play_match(alphago, pachi, save_dir)
+while True:
+    end_of_game = match.play()
+    if end_of_game:
+        break

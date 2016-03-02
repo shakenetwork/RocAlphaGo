@@ -28,7 +28,7 @@ class GameState(object):
         other.turns_played = self.turns_played
         other.current_player = self.current_player
         other.ko = self.ko
-        other.history = self.history
+        other.history = list(self.history)
         other.num_black_prisoners = self.num_black_prisoners
         other.num_white_prisoners = self.num_white_prisoners
         return other
@@ -46,6 +46,20 @@ class GameState(object):
         position
         """
         return len(self.liberty_pos(position))
+
+    def liberty_count_group(self, group):
+        """Count liberty of a single position (maxium = 4).
+
+        Keyword arguments:
+        position -- a tuple of (x, y)
+        x being the column index of the position we want to calculate the liberty
+        y being the row index of the position we want to calculate the liberty
+
+        Return:
+        q -- The liberty count for entire group
+        position
+        """
+        return len(self.liberty_pos_group(group))
 
     def liberty_pos(self, position):
         """Record the liberty positions of a single position.
@@ -82,7 +96,9 @@ class GameState(object):
         """
         pos = []
         for p in group:
-            pos.append(self.liberty_pos(p))
+            lib = self.liberty_pos(p)
+            if len(lib) > 0:
+                pos.extend(lib)
         pos = list(set(pos))  # Remove redundant tuples
         return pos
 
@@ -113,7 +129,7 @@ class GameState(object):
             neighbor_set.append((x, y-1))
         return neighbor_set
 
-    def visit_neighbor(self, position):
+    def get_group(self, position):
         """An auxiliary function for update_current_liberties. This function performs the
         visiting process to identify a connected group of the same color.
 
@@ -123,7 +139,7 @@ class GameState(object):
         y being the row index of the starting position of the search
 
         Return:
-        neighbor_set -- Return a set of (x, y) tuples corresponding to a cluster of
+        neighbor_set -- Return a list of (x, y) tuples corresponding to a cluster of
         stones belonging to one player, which contains the input single position.
         len(neighbor_set) is size of the cluster, can be large.
         """
@@ -149,9 +165,8 @@ class GameState(object):
                     # we don't need to consider the places we already visited when we're looking
                     if n not in visited:
                         to_visit.append(n)
-
-        neighbor_set = set(visited)
-        return neighbor_set
+        neighbor_list = list(set(visited))
+        return neighbor_list
 
     def update_current_liberties(self):
         """Calculate the liberty values of the whole board
@@ -177,7 +192,7 @@ class GameState(object):
 
                 # get the members in the cluster and then calculate their liberty positions
                 lib_set = set()
-                neighbors = self.visit_neighbor((x, y))
+                neighbors = self.get_group((x, y))
                 for n in neighbors:
                     lib_set |= set(self.liberty_pos(n))
 
@@ -253,6 +268,12 @@ class GameState(object):
             print 'Found 1-libs on board...'
             # select only those 1-libs that belong to opponent
             one_lib_opp = np.logical_and(one_lib, tmp.board == tmp.current_player)
+            # further select only those within the neighborhood of 'action'
+            neighbors = self.get_neighbor(action)
+            BP()
+            # for (x, y) in neighbors:
+            #     if 
+
             if np.any(one_lib_opp):
                 print 'Found 1-libs belonging to opponent...'
                 x_1lib, y_1lib = np.where(
@@ -266,19 +287,22 @@ class GameState(object):
                     print "Testing tuple ", t
                     tmp1 = tmp.copy()
                     # Get open space
-                    libs = tmp1.liberty_pos(t)
-                    assert len(libs) == 1
-                    lib = libs[0]
-                    tmp1.do_move(lib)
-                    # Now check liberties at t
-                    n_libs = tmp1.liberty_count(lib)
-                    if n_libs == 2:
-                        # We've met our criteria. 'action' is ladder capture
-                        return True
-                    print "Didn't work. There were {} resultant liberties".format(n_libs)
+                    if tmp1.liberty_count(t) == 1:
+                        libs = tmp1.liberty_pos(t)
+                        assert len(libs) == 1  # If not, liberty_count was mistaken
+                        lib = libs[0]
+                        tmp1.do_move(lib)
+                        # Now check liberties at t
+                        n_libs = tmp1.liberty_count(lib)
+                        if n_libs == 2:
+                            # We've met our criteria. 'action' is ladder capture
+                            return True
+                        print "Didn't work. There were {} resultant liberties".format(n_libs)
+                    else:
+                        "Zero liberties. Trying next tuple..."
                 # We've checked all opponent 1-libs, and none resulted in
                 # exactly 2 libs, so 'action' is not a ladder capture.
-                print "None of the opponent 1-libs plays resulted in 2 liberties. Not a ladder."
+                print "None of the opponent 1-lib plays resulted in 2 liberties. Not a ladder."
                 return False
             else:
                 print "Opponent had no 1-libs. Not a ladder."
@@ -288,31 +312,39 @@ class GameState(object):
             # Not a ladder, because no 1-lib groups on board
             return False
 
+    def is_ladder_escape(self, action):
+        """Version 1: A move is a 'ladder escape' if a) player is currently trapped
+        in ladder and there is exactly one liberty for group of stones in the
+        ladder, and b) playing at that liberty results in more than 2 liberties
 
-        # # Test condition 1
-        # tmp = self.copy()
-        # board_libs0 = tmp.update_current_liberties()
-        # tmp.do_move(action)
-        # board_libs1 = tmp.update_current_liberties()
-        # diff = board_libs0 - board_libs1
-        # if np.any(diff == 1):
-        #     # Move results in atari (cond. 1) so check cond. 2
-        #     # Find positions corresponding to stones trapped by ladder
-        #     group = np.where(diff == 1)
-        #     BP()
-        #     # Do move=action for current player
-        #     tmp.do_move(action)
-        #     # Look for 
-        #     # Update liberties
-        #     board_libs = tmp.update_current_liberties()
-        #     # Find move that protects against capture
+        Version 2: A move is a 'ladder escape' if afterwards, opponent no longer has an
+        option for ladder capture. Test by looking over all legal opponent
+        moves to see if there are any ladder captures.
+        """
+        from ipdb import set_trace as BP
+        # First, check if currently in a ladder by seeing if previous opponent
+        # move was a ladder capture. (Sufficient check, because every
+        # subsequent offensive by the capturer in a ladder sequence should
+        # also be a ladder capture)
+        if self.prev.is_ladder_capture(self.history[-1]):
+            # Then, simulate move...
+            tmp = self.copy()
+            tmp.do_move(action)
+            # ...and count liberties
+            lib_count = tmp.liberty_count_group(tmp.get_group(action))
+            BP()
+            if lib_count > 2:
+                return True
 
-        #     # Simulate opponent move that protects against capture
-        #     safe_move = self.liberty_pos()
-        # # libs0 = #board_libs[x, y]
-        # # Test condition 2
-
-        # return ladder
+            # Version 2
+            # # and test if opponent has any ladder capture options
+            # for move in tmp.get_legal_moves():
+            #     if tmp.is_ladder_capture(move):
+            #         # Opponent still has a ladder capture available, so not a
+            #         # ladder escape
+            #         return False
+            # return True
+        return False
 
     def do_move(self, action):
         """Play current_player's color at (x,y)
@@ -320,13 +352,14 @@ class GameState(object):
         If it is a legal move, current_player switches to the other player
         If not, an IllegalMove exception is raised
         """
+        # Hold onto previous state for use in is_ladder_escape
+        self.prev = self.copy()
         if self.is_legal(action):
             # reset ko
             self.ko = None
             if action is not PASS_MOVE:
                 (x, y) = action
                 self.board[x][y] = self.current_player
-
                 # check liberties for captures
                 liberties = self.update_current_liberties()
                 zero_liberties = liberties == 0
@@ -343,7 +376,7 @@ class GameState(object):
                     else:
                         self.num_black_prisoners += num_captured
                     if num_captured == 1:
-                        xcoord,ycoord = np.where(captured_stones)
+                        xcoord, ycoord = np.where(captured_stones)
                         self.ko = (xcoord[0], ycoord[0])
             # next turn
             self.current_player = -self.current_player
@@ -351,6 +384,46 @@ class GameState(object):
             self.history.append(action)
         else:
             raise IllegalMove(str(action))
+
+    # def do_move_copy(self, gs, action):
+    #     """Play current_player's color at (x,y) on copy of games state, gs
+
+    #     If it is a legal move, current_player switches to the other player
+    #     If not, an IllegalMove exception is raised
+    #     """
+    #     # Hold onto previous state for use in is_ladder_escape
+    #     gs.prev = gs.copy()
+    #     if gs.is_legal(action):
+    #         # reset ko
+    #         gs.ko = None
+    #         if action is not PASS_MOVE:
+    #             (x, y) = action
+    #             gs.board[x][y] = gs.current_player
+    #             # check liberties for captures
+    #             liberties = gs.update_current_liberties()
+    #             zero_liberties = liberties == 0
+    #             other_player = gs.board == -gs.current_player
+    #             captured_stones = np.logical_and(zero_liberties, other_player)
+    #             capture_occurred = np.any(captured_stones)  # note EMPTY spaces are -1
+    #             if capture_occurred:
+    #                 # clear pieces
+    #                 gs.board[captured_stones] = EMPTY
+    #                 # count prisoners
+    #                 num_captured = np.sum(captured_stones)
+    #                 if gs.current_player == BLACK:
+    #                     gs.num_white_prisoners += num_captured
+    #                 else:
+    #                     gs.num_black_prisoners += num_captured
+    #                 if num_captured == 1:
+    #                     xcoord, ycoord = np.where(captured_stones)
+    #                     gs.ko = (xcoord[0], ycoord[0])
+    #         # next turn
+    #         gs.current_player = -gs.current_player
+    #         gs.turns_played += 1
+    #         gs.history.append(action)
+    #     else:
+    #         raise IllegalMove(str(action))
+    #     return gs
 
     def symmetries(self):
         """returns a list of 8 GameState objects:
@@ -376,7 +449,8 @@ class GameState(object):
         def update_ko_history(copy, name):
             if copy.ko is not None:
                 copy.ko = xy_symmetry_functions[name](copy.ko)
-            copy.history = [xy_symmetry_functions[name](a) if a is not PASS_MOVE else PASS_MOVE for a in copy.history]
+            copy.history = [xy_symmetry_functions[name](a) if a is not
+                            PASS_MOVE else PASS_MOVE for a in copy.history]
 
         copies = [self.copy() for i in range(8)]
         # copies[0] is the original.
