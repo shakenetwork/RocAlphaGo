@@ -270,6 +270,7 @@ class GameState(object):
             one_lib_opp = np.logical_and(one_lib, tmp.board == tmp.current_player)
             # further select only those within the neighborhood of 'action'
             neighbors = self.get_neighbor(action)
+            X_n, Y_n = neighbors
             BP()
             # for (x, y) in neighbors:
             #     if 

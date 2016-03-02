@@ -57,7 +57,7 @@ class CNNPolicy(object):
 
 		# get network activations at legal move locations
 		# note: may not be a proper distribution by ignoring illegal moves
-		return [((x,y), network_output[x,y]) for (x,y) in state.get_legal_moves()]
+		return [((x, y), network_output[x, y]) for (x, y) in state.get_legal_moves()]
 
 	@staticmethod
 	def create_network(**kwargs):
