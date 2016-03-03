@@ -269,11 +269,11 @@ class GameState(object):
             # select only those 1-libs that belong to opponent
             one_lib_opp = np.logical_and(one_lib, tmp.board == tmp.current_player)
             # further select only those within the neighborhood of 'action'
-            neighbors = self.get_neighbor(action)
-            X_n, Y_n = neighbors
-            BP()
-            # for (x, y) in neighbors:
-            #     if 
+            # neighbors = self.get_neighbor(action)
+            # X_n, Y_n = neighbors
+            # BP()
+            # # for (x, y) in neighbors:
+            # #     if 
 
             if np.any(one_lib_opp):
                 print 'Found 1-libs belonging to opponent...'
