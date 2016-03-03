@@ -255,7 +255,6 @@ class GameState(object):
         (Note that (1) doesn't have to be directly caused by the move we're
         considering. The atari may have been played on a previous turn.)
         """
-        from ipdb import set_trace as BP
         (x, y) = action
         # Play out from point of view of opponent getting captured by ladder
         tmp = self.copy()
