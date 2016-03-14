@@ -46,12 +46,11 @@ def get_liberties(state, maximum=8):
 	- EMPTY locations are all-zero features
 	"""
 	planes = np.zeros((state.size, state.size, maximum))
-	liberties = state.update_current_liberties()
 	for i in range(maximum):
 		# single liberties in plane zero (groups won't have zero), double liberties in plane one, etc
-		planes[liberties == i+1, i] = 1
+		planes[state.liberty_counts == i+1, i] = 1
 	# the "maximum-or-more" case on the backmost plane
-	planes[liberties >= maximum, maximum-1] = 1
+	planes[state.liberty_counts >= maximum, maximum-1] = 1
 	return planes
 
 def get_capture_size(state, maximum=8):
@@ -67,12 +66,15 @@ def get_capture_size(state, maximum=8):
 	planes = np.zeros((state.size, state.size, maximum))
 	# check difference in size after doing each move
 	for (x,y) in state.get_legal_moves():
-		copy = state.copy()
-		copy.do_move((x,y))
-		if state.current_player == go.BLACK:
-			n_captured = copy.num_white_prisoners - state.num_white_prisoners
-		else:
-			n_captured = copy.num_black_prisoners - state.num_black_prisoners
+		n_captured = 0
+		for neighbor_group in state.get_groups_around((x,y)):
+			# if the neighboring group is opponent stones and they have
+			# one liberty, it must be (x,y) and we are capturing them
+			# (note suicide and ko are not an issue because they are not
+			# legal moves)
+			(gx,gy) = next(iter(neighbor_group))
+			if state.liberty_counts[gx][gy] == 1:
+				n_captured += len(state.group_sets[gx][gy])
 		planes[x,y,min(n_captured,maximum-1)] = 1
 	return planes
 
@@ -82,12 +84,23 @@ def get_self_atari_size(state, maximum=8):
 	planes = np.zeros((state.size, state.size, maximum))
 
 	for (x,y) in state.get_legal_moves():
-		copy = state.copy()
-		copy.do_move((x,y))
-		# check for atari of the group connected to a
-		if copy.update_current_liberties()[(x,y)] == 1:
-			group_size = len(copy.get_group((x,y)))
-			# 0th plane used for size-1, so group_size-1 is the index
+		# make a copy of the liberty/group sets at (x,y) so we can manipulate them
+		lib_set_after = set(state.liberty_sets[x][y])
+		group_set_after = set()
+		group_set_after.add((x,y))
+		for neighbor_group in state.get_groups_around((x,y)):
+			# if the neighboring group is of the same color as the current player
+			# then playing here will connect this stone to that group
+			(gx,gy) = next(iter(neighbor_group))
+			if state.board[gx,gy] == state.current_player:
+				lib_set_after |= state.liberty_sets[gx][gy]
+				group_set_after |= state.liberty_sets[gx][gy]
+		if (x,y) in lib_set_after:
+			lib_set_after.remove((x,y))
+		# check if this move resulted in atari
+		if len(lib_set_after) == 1:
+			group_size = len(group_set_after)
+			# 0th plane used for size=1, so group_size-1 is the index
 			planes[x,y,min(group_size-1,maximum-1)] = 1
 	return planes
 
@@ -103,10 +116,20 @@ def get_liberties_after(state, maximum=8):
 	feature = np.zeros((state.size, state.size, maximum))
 	# note - left as all zeros if not a legal move
 	for (x,y) in state.get_legal_moves():
-		tmp = state.copy()
-		tmp.do_move((x,y))
-		liberties_after_at_a = tmp.update_current_liberties()[x,y]
-		feature[x,y,min(maximum-1,liberties_after_at_a)] = 1
+		# make a copy of the set of liberties at (x,y) so we can add to it
+		lib_set_after = set(state.liberty_sets[x][y])
+		for neighbor_group in state.get_groups_around((x,y)):
+			# if the neighboring group is of the same color as the current player
+			# then playing here will connect this stone to that group and
+			# therefore add in all that group's liberties
+			(gx,gy) = next(iter(neighbor_group))
+			if state.board[gx,gy] == state.current_player:
+				lib_set_after |= state.liberty_sets[gx][gy]
+		# (x,y) itself may have made its way back in, but shouldn't count
+		# since it's clearly not a liberty after playing there
+		if (x,y) in lib_set_after:
+			lib_set_after.remove((x,y))
+		feature[x,y,min(maximum-1,len(lib_set_after))] = 1
 	return feature
 
 def get_ladder_capture(state):
@@ -187,6 +210,7 @@ class Preprocess(object):
 		"""
 
 		self.output_dim = 0
+		self.feature_list = feature_list
 		self.processors = [None] * len(feature_list)
 		for i in range(len(feature_list)):
 			feat = feature_list[i].lower()

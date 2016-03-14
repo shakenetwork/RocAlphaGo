@@ -28,14 +28,17 @@ class game_converter:
         return one_hot
 
     # convert full game into training samples
-    def convert_game(self,file_name):
+    def convert_game(self, file_name, features=None):
         with open(file_name,'r') as file_object:
             sgf_object = SGFParser(file_object.read())
         c = sgf_object.parse().cursor()
         tensors = []
         actions = []
         gs = go.GameState()
-        proc = Preprocess()
+        if features is None:
+            proc = Preprocess()
+        else:
+            proc = Preprocess(features)
         while True:
             try:
                 move = self.parse_raw_move(c.next())
@@ -49,12 +52,12 @@ class game_converter:
         return zip(tensors, actions)
 
     # lazily convert folder of games into training samples
-    def batch_convert(self,folder_path):
+    def batch_convert(self, folder_path, features=None):
         file_names = os.listdir(folder_path)
         for file_name in file_names:
             if file_name[-4:] != '.sgf': continue
             print file_name
-            training_samples = self.convert_game(os.path.join(folder_path,file_name))
+            training_samples = self.convert_game(os.path.join(folder_path,file_name), features)
             for sample in training_samples:
                 yield sample
 
@@ -66,7 +69,9 @@ if __name__ == '__main__':
 
     converter = game_converter()
     file_num = 0
-    for s_a_tuple in converter.batch_convert(args.infolder):
-        file_name = str(hash(s_a_tuple)) + "_" + str(file_num)
+    for s_a_tuple in converter.batch_convert(args.infolder,
+        features=["board", "ones", "turns_since", "liberties", "capture_size",
+        "self_atari_size", "liberties_after","sensibleness", "zeros"]):
+        file_name = str(hash(s_a_tuple[1])) + "_" + str(file_num)
         pickle.dump(s_a_tuple, open(os.path.join(args.outfolder,file_name), "wb"))
         file_num += 1
