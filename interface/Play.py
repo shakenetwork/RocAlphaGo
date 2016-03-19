@@ -1,5 +1,5 @@
 """Interface for AlphaGo self-play"""
-from go import GameState
+from AlphaGo.go import GameState
 
 
 class play_match(object):
@@ -10,6 +10,8 @@ class play_match(object):
         self.player2 = player2
         # self.state = GameState(save_dir, size=size)
         self.state = GameState(size=size)
+        # self.pass_count = 0  # If both white and black pass in succession,
+        #                      # game ends
         # I Propose that GameState should take a top-level save directory,
         # then automatically generate the specific file name
 

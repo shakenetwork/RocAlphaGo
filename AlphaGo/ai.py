@@ -7,5 +7,9 @@ class GreedyPolicyPlayer(object):
 
     def get_move(self, state):
         action_probs = self.policy.eval_state(state)
-        max_prob = max(action_probs, key=lambda (a, p): p)
-        return max_prob[0]
+        if len(action_probs) > 0:
+            max_prob = max(action_probs, key=lambda (a, p): p)
+            return max_prob[0]
+        else:
+            # No legal moves available, do so pass move
+            return None
