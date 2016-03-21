@@ -3,6 +3,7 @@ import AlphaGo.go as go
 import numpy as np
 import unittest
 
+
 class TestLadders(unittest.TestCase):
 
     def setUp(self):
@@ -45,7 +46,6 @@ class TestLadders(unittest.TestCase):
         self.s.do_move((3, 2))
         self.s.do_move((3, 3))
         self.assertTrue(self.s.is_ladder_escape((4, 2)))
-
 
 
 if __name__ == '__main__':
