@@ -29,6 +29,9 @@ class GameState(object):
 		# Each pass move by a player subtracts a point
 		self.passes_white = 0
 		self.passes_black = 0
+		# Sequences of moves that consitute ladder capture, cached for more
+		# efficient computation
+		self.cached_ladders = []
 		# `self.liberty_sets` is a 2D array with the same indexes as `board`
 		# each entry points to a set of tuples - the liberties of a stone's
 		# connected block. By caching liberties in this way, we can directly
@@ -55,10 +58,12 @@ class GameState(object):
 
 	def get_group(self, position):
 		"""Get the group of connected same-color stones to the given position
+
 		Keyword arguments:
 		position -- a tuple of (x, y)
 		x being the column index of the starting position of the search
 		y being the row index of the starting position of the search
+
 		Return:
 		a set of tuples consist of (x, y)s which are the same-color cluster
 		which contains the input single position. len(group) is size of the cluster, can be large.
@@ -68,7 +73,8 @@ class GameState(object):
 		return self.group_sets[x][y]
 
 	def get_groups_around(self, position):
-		"""returns a list of the unique groups adjacent to position
+		"""returns a list of the unique groups adjacent to position.
+
 		'unique' means that, for example in this position:
 			. . . . .
 			. B W . .
@@ -115,7 +121,6 @@ class GameState(object):
 		given that a stone was just played at `position`
 		"""
 		(x, y) = position
-
 		merged_group = set()
 		merged_group.add(position)
 		merged_libs = self.liberty_sets[x][y]
@@ -212,6 +217,7 @@ class GameState(object):
 
 	def is_legal(self, action):
 		"""determine if the given action (x,y tuple) is a legal move
+
 		note: we only check ko, not superko at this point (TODO?)
 		"""
 		# passing move
@@ -264,6 +270,142 @@ class GameState(object):
 			if num_bad_diagonal > allowable_bad_diagonal:
 				return False
 		return True
+
+	def is_ladder_capture(self, action):
+		"""
+		Test whether action would result in a ladder capture by current player.
+		This function does a full roll-out of the ladder sequence to test whether
+		it ends in successful capture.
+		"""
+		# np.set_printoptions(linewidth=150)
+
+		def _get_9neighbors(pos):
+			"""Private function of is_ladder_capture. Returns the 9 directly neighboring
+			positions around pos."""
+			return self._neighbors(pos) + self._diagonals(pos)
+
+		def play_out_ladder(prey_move, lboard, hunter_move):
+			"""Keep playing moves until ladder capture or escape is reached.
+			Args:
+			prey_move (Tuple) -- Prey's first move after `action`. Must be in a 1-lib space
+			lboard (array) -- Copy of board, to be used for testing this ladder move.
+			hunter_move (tuple) -- Hunter's previous move (i.e. `action`).
+			"""
+			# Play prey's 1-lib
+			lboard.do_move(prey_move)
+			# Check that exactly 2 liberties were generated at prey_move
+			prey_libs = lboard.liberty_sets[prey_move[0]][prey_move[1]]
+			if len(prey_libs) == 2:
+				while True:
+					# Hunter move should be diagonal from previous move, so choose the one
+					# that meets this criterion. (TODO: May be cases where this isn't correct)
+					h_move = []
+					for lib in prey_libs:
+						# Check that move is diagonal from `hunter_move`
+						if lib[0] != hunter_move[0] and lib[1] != hunter_move[1]:
+							h_move.append(lib)
+					if len(h_move) == 1:
+						# Got the expected number of hunter moves diagonal to `hunter_move`, so
+						# continue. Now play hunter move there.
+						hunter_move = h_move[0]
+						lboard.do_move(hunter_move)
+						# Now check that this move generates a 1lib for prey and isn't a
+						# capture by hunter
+						prey_move = lboard.history[-2]
+						if lboard.board[prey_move] == 0:
+							# Is capture by hunter (before reaching edge of board), so successful
+							# ladder capture
+							# print "Was successful ladder capture (before edge of board reached)."
+							return True
+						elif lboard.liberty_counts[prey_move] == 1 and \
+							lboard.board[prey_move] != 0:
+							# Do prey move in the 1lib position
+							one_lib_move = tuple(lboard.liberty_sets[
+								prey_move[0]][prey_move[1]])[0]
+							print one_lib_move
+							lboard.do_move(one_lib_move)
+							# Update prey_move
+							prey_move = lboard.history[-1]
+							# Update prey_libs, which gives set of libs at prey move
+							prey_libs = lboard.liberty_sets[prey_move[0]][prey_move[1]]
+							# move_sequence.extend(lboard.history[-2:])  # TODO
+						else:
+							# Prey's second move escapes ladder
+							# print "Prey escaped. Not ladder."
+							was_ladder_capture = False
+							break
+					else:
+						# There were either no diagonal moves available to hunter for next
+						# move, or there were more than one. (TODO: Is the latter possible?)
+						# First, check if this is because we've reached end of ladder, and
+						# hunter can finally capture all prey stones. If this is the case,
+						# prey should only have one liberty at their last move.
+						if len(prey_libs) == 1:
+							# Now see if hunter moving into that liberty would cause a
+							# capture.
+							lboard_tmp = lboard.copy()
+							lboard_tmp.do_move(list(prey_libs)[0])
+							if lboard_tmp.board[prey_move] == 0:
+								# Was a capture
+								# print "Was successful ladder capture."
+								return True
+						# Wasn't because we reached end of ladder. Must be because of an
+						# escape stone in the ladder path.
+						# print "No diagonal moves for hunter. Not a ladder."
+						was_ladder_capture = False
+						break
+			else:
+				# Initial prey move did not generate exactly 2 liberties
+				# print "Prey move did not generate exactly 2 liberties. Not a ladder."
+				was_ladder_capture = False
+			return was_ladder_capture
+
+		# TODO: Use cached away ladders for more efficient computation
+		tmp = self.copy()
+		tmp.do_move(action)
+		if np.any(tmp.liberty_counts == 1):
+			# Found 1libs on board
+			# print 'Found 1-libs on board...'
+			is_one_lib = np.zeros_like(tmp.liberty_counts)
+			is_one_lib[tmp.liberty_counts == 1] = 1  # 1 where 1lib, zero otherwise
+			# select only those within the neighborhood of 'action'
+			neighors = _get_9neighbors(action)
+			one_lib_neighbors = []  # List of 1lib positions in neighborhood of action
+			for n in neighors:
+				if is_one_lib[n[0], n[1]]:
+					one_lib_neighbors.append(n)
+			# select only those 1-libs that belong to prey
+			one_lib_prey = []
+			for l in one_lib_neighbors:
+				if tmp.board[l[0], l[1]] == tmp.current_player:
+					one_lib_prey.append(list(l))
+			if len(one_lib_prey) > 0:
+				# Prey has 1lib after black's move. Continue to play out ladder.
+				# print 'Found 1-libs belonging to opponent...'
+				# Try each of prey's 1libs in turn to see if it's a ladder.
+				# TODO: Even possible to have multiple ladder options
+				# for the same move?
+				for lib in one_lib_prey:
+					tmp1 = tmp.copy()
+					# Get open space
+					prey_move = list(tmp1.liberty_sets[lib[0]][lib[1]])[0]
+					# Play out rest of ladder until ladder escape or capture reached
+					is_ladder = play_out_ladder(prey_move, tmp, action)
+					if is_ladder:
+						return True
+					# If successful ladder capture, cache away for later (TODO)
+					# self.cached_ladders.append(tmp1)
+				# We've checked all opponent 1-libs, and none resulted in
+				# exactly 2 libs, so 'action' is not a ladder capture.
+				# print "None of the opponent 1-lib plays resulted in 2 liberties. Not a ladder."
+				return False
+			else:
+				# print "Opponent had no 1-libs. Not a ladder."
+				return False  # Not a ladder, because opponent has no 1-lib groups
+		else:
+			# print "Found no 1-libs. Not a ladder."
+			# Not a ladder, because no 1-lib groups on board
+			return False
 
 	def get_legal_moves(self, include_eyes=True):
 		if self.__legal_move_cache is not None:
