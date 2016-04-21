@@ -206,6 +206,11 @@ FEATURES = {
 	"zeros": {
 		"size": 1,
 		"function": lambda state: np.zeros((state.size, state.size))
+	},
+	"color": {
+		"size": 1,
+		"function": lambda state: np.ones((1, state.size, state.size)) *
+		(state.current_player == go.BLACK)
 	}
 }
 

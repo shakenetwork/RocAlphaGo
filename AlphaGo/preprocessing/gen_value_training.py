@@ -54,7 +54,7 @@ def play_batch(player_RL, player_SL, batch_size, features):
         X_list = [st.copy() for st in states]  # For later 1hot preprocessing
         return X_list, colors, states, player
 
-    def convert(X_list):
+    def convert(X_list, preprocessor):
         """Convert states to 1-hot and concatenate. X's are game state objects.
         """
         states = np.concatenate(
@@ -65,7 +65,7 @@ def play_batch(player_RL, player_SL, batch_size, features):
     preprocessor = Preprocess(features)
     player = player_SL
     states = [GameState() for i in xrange(batch_size)]
-    # Randomly choose move to play uniform random. Move prior will be from SL
+    # Randomly choose turn to play uniform random. Move prior will be from SL
     # policy. Moves after will be from RL policy.
     i_rand_move = np.random.choice(range(450))
     turn = 0
@@ -96,7 +96,7 @@ def play_batch(player_RL, player_SL, batch_size, features):
         if all(done):
             break
     # Concatenate training examples
-    X = convert(X_list)
+    X = convert(X_list, preprocessor)
     winners = [st.get_winner() for st in states]
     print 'i_rand_move: ', i_rand_move
     print 'colors: ', colors
@@ -107,7 +107,7 @@ def run(player_RL, player_SL, out_pth, n_training_pairs, batch_size, features):
     X_list = []
     winners_list = []
     colors_list = []
-    for n in xrange(n_training_pairs):
+    for n in xrange(n_training_pairs / batch_size):
         X, winners, colors = play_batch(player_RL, player_SL, batch_size, features)
         X_list.append(X)
         winners_list.extend(winners)
