@@ -12,7 +12,7 @@ from keras.models import Sequential, model_from_json
 # DECAY = 8.664339379294006e-08  # rate of exponential learning_rate decay
 
 
-class CNNValue:
+class CNNValue(object):
     """A convolutional neural network to guess the reward at the end of the
     game for a given board state, under the optimal policy.
     """

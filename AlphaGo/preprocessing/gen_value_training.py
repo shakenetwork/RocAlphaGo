@@ -145,6 +145,8 @@ if __name__ == '__main__':
     # Load architecture and weights from file
     policy_SL = CNNPolicy.load_model(args.model_path)
     features = policy_SL.preprocessor.feature_list
+    if "color" not in features:
+        features.append("color")
     policy_SL.model.load_weights(args.SL_weights_path)
     policy_RL = CNNPolicy.load_model(args.model_path)
     policy_RL.model.load_weights(args.RL_weights_path)
