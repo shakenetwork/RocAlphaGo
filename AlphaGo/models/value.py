@@ -30,28 +30,31 @@ class CNNValue(object):
         """Construct a function using the current keras backend that, when given a batch
         of inputs, simply processes them forward and returns the output
 
-        The output has size (batch x 1) for any size board.
+        The output has size (batch x 361) for 19x19 boards (i.e. the output is a batch
+        of distributions over flattened boards. See AlphaGo.util#flatten_idx)
 
         This is as opposed to model.compile(), which takes a loss function
         and training method.
 
         c.f. https://github.com/fchollet/keras/issues/1426
         """
-        model_input = self.model.get_input(train=False)
-        model_output = self.model.get_output(train=False)
-        forward_function = K.function([model_input], [model_output])
+        forward_function = K.function([self.model.input], [self.model.output])
 
         # the forward_function returns a list of tensors
         # the first [0] gets the front tensor.
         return lambda inpt: forward_function([inpt])[0]
 
     def eval_state(self, state, moves=None):
-        """Given a GameState object, returns a value (float between (-1, 1))
+        """Given a GameState object, returns a list of (action, probability) pairs
+        according to the network outputs
+
+        If a list of moves is specified, only those moves are kept in the distribution
         """
         tensor = self.preprocessor.state_to_tensor(state)
         # run the tensor through the network
         network_output = self.forward(tensor)
-        return network_output
+        moves = moves or state.get_legal_moves()
+        return self._select_moves_and_normalize(network_output[0], moves, state.size)
 
     @staticmethod
     def create_network(**kwargs):

@@ -136,10 +136,10 @@ if __name__ == '__main__':
                         " Default: None", default=None)
     parser.add_argument(
         "--n_training_pairs", help="Number of training pairs to generate. "
-        "(Default: 20)", type=int, default=2)
+        "(Default: 10)", type=int, default=10)
     parser.add_argument(
         "--batch_size", help="Number of games to run in parallel. "
-        "(Default: 10)", type=int, default=2)
+        "(Default: 2)", type=int, default=2)
     args = parser.parse_args()
 
     # Load architecture and weights from file

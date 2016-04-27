@@ -4,7 +4,7 @@ import h5py as h5
 import json
 from keras.optimizers import SGD
 from keras.callbacks import ModelCheckpoint, Callback
-from AlphaGo.models.policy import CNNValue
+from AlphaGo.models.value import CNNValue
 
 
 def one_hot_action(action, size=19):
@@ -126,7 +126,7 @@ def run_training(cmd_line_args=None):
     # load model from json spec
     model = CNNValue.load_model(args.model).model
     if resume:
-        model.load_weights(args.weights)
+        model.load_weights(os.path.join(args.out_directory, args.weights))
 
     # TODO - (waiting on game_converter) verify that features of model match features of training data
     dataset = h5.File(args.train_data)
@@ -162,7 +162,7 @@ def run_training(cmd_line_args=None):
     meta_writer.metadata["model_file"] = args.model
 
     # create ModelCheckpoint to save weights every epoch
-    checkpoint_template = os.path.join(args.out_directory, "weights.{epoch:02d}.hdf5")
+    checkpoint_template = os.path.join(args.out_directory, "weights.{epoch:05d}.hdf5")
     checkpointer = ModelCheckpoint(checkpoint_template)
 
     # load precomputed random-shuffle indices or create them
@@ -214,7 +214,7 @@ def run_training(cmd_line_args=None):
         nb_epoch=args.epochs,
         callbacks=[checkpointer, meta_writer],
         validation_data=val_data_generator,
-        nb_val_samples=n_val_data,
+        nb_val_samples=n_val_data or 1,  # Temporary hack
         show_accuracy=True,
         nb_worker=args.workers)
 
