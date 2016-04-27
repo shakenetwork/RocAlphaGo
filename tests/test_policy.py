@@ -17,8 +17,8 @@ class TestCNNPolicy(unittest.TestCase):
 	def test_batch_eval_state(self):
 		policy = CNNPolicy(["board", "liberties", "sensibleness", "capture_size"])
 		results = policy.batch_eval_state([GameState(), GameState()])
-		self.assertEqual(len(results), 2) # one result per GameState
-		self.assertEqual(len(results[0]), 361) # each one has 361 (move,prob) pairs
+		self.assertEqual(len(results), 2)  # one result per GameState
+		self.assertEqual(len(results[0]), 361)  # each one has 361 (move,prob) pairs
 
 	def test_output_size(self):
 		policy19 = CNNPolicy(["board", "liberties", "sensibleness", "capture_size"], board=19)
@@ -34,15 +34,27 @@ class TestCNNPolicy(unittest.TestCase):
 
 		model_file = 'TESTPOLICY.json'
 		weights_file = 'TESTWEIGHTS.h5'
+		model_file2 = 'TESTPOLICY2.json'
+		weights_file2 = 'TESTWEIGHTS2.h5'
 
+		# test saving model/weights separately
 		policy.save_model(model_file)
 		policy.model.save_weights(weights_file)
+		# test saving them together
+		policy.save_model(model_file2, weights_file2)
 
 		copypolicy = CNNPolicy.load_model(model_file)
 		copypolicy.model.load_weights(weights_file)
 
+		copypolicy2 = CNNPolicy.load_model(model_file2)
+
+		for w1, w2 in zip(copypolicy.model.get_weights(), copypolicy2.model.get_weights()):
+			self.assertTrue(np.all(w1 == w2))
+
 		os.remove(model_file)
 		os.remove(weights_file)
+		os.remove(model_file2)
+		os.remove(weights_file2)
 
 
 class TestPlayers(unittest.TestCase):
