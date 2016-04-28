@@ -67,7 +67,7 @@ class CNNValue(object):
         defaults = {
             "board": 19,
             "filters_per_layer": 128,
-            "layers": 12,  # layers 2-11 are identical to policy net
+            "layers": 13,  # layers 2-12 are identical to policy net
             "filter_width_1": 5
         }
         # copy defaults, but override with anything in kwargs
@@ -109,7 +109,7 @@ class CNNValue(object):
             nb_row=1,
             nb_col=1,
             init='uniform',
-            activation='linear',
+            activation='relu',
             border_mode='same'))
         network.add(Flatten())
         network.add(Dense(256, init='uniform'))
