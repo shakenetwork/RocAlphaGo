@@ -1,9 +1,7 @@
+"""Functions for converting from GameState objects to 1-hot encoded features.
+"""
 import numpy as np
 import AlphaGo.go as go
-
-##
-## individual feature functions (state --> tensor) begin here
-##
 
 
 def get_board(state):

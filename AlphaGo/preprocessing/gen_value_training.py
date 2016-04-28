@@ -6,28 +6,33 @@ from AlphaGo.preprocessing.preprocessing import Preprocess
 import h5py
 import numpy as np
 import os
-#
-# from ipdb import set_trace as BP
+import warnings
 
 
-def save(out_pth, X, winners_list, colors_list):
+def init_hdf5(out_pth, n_features, bd_size):
     tmp_file = os.path.join(os.path.dirname(out_pth), ".tmp." + os.path.basename(out_pth))
-    f = h5py.File(tmp_file, 'w')
+    h5f = h5py.File(tmp_file, 'w')
     try:
-        f.create_dataset(
+        states = h5f.require_dataset(
             'states',
             dtype=np.uint8,
-            chunks=(min(64, X.shape[0]),) + X.shape[1:],      # approximately 1MB chunks
-            compression="lzf",
-            data=X)
-        f.create_dataset('winners', data=winners_list)
-        f.create_dataset('colors', data=colors_list)
-        f.close()
-        os.rename(tmp_file, out_pth)
+            shape=(1, n_features, bd_size, bd_size),
+            maxshape=(None, n_features, bd_size, bd_size),  # 'None' dimension allows it to grow arbitrarily
+            exact=False,                                         # allow non-uint8 datasets to be loaded, coerced to uint8
+            chunks=(64, n_features, bd_size, bd_size),      # approximately 1MB chunks
+            compression="lzf")
+        winners = h5f.require_dataset(
+            'winners',
+            dtype=np.int8,
+            shape=(1, 1),
+            maxshape=(None, 1),
+            exact=False,
+            chunks=(1024, 1),
+            compression="lzf")
     except Exception as e:
         os.remove(tmp_file)
         raise e
-    return
+    return states, winners
 
 
 def play_batch(player_RL, player_SL, batch_size, features):
@@ -68,6 +73,8 @@ def play_batch(player_RL, player_SL, batch_size, features):
     # Randomly choose turn to play uniform random. Move prior will be from SL
     # policy. Moves after will be from RL policy.
     i_rand_move = np.random.choice(range(450))
+    X_list = None
+    winners = None
     turn = 0
     while True:
         # Do moves (black)
@@ -97,24 +104,35 @@ def play_batch(player_RL, player_SL, batch_size, features):
             break
     # Concatenate training examples
     X = convert(X_list, preprocessor)
-    winners = [st.get_winner() for st in states]
-    print 'i_rand_move: ', i_rand_move
-    print 'colors: ', colors
-    return X, winners, colors
+    winners = np.array([st.get_winner() for st in states]).reshape(batch_size, 1)
+    return X, winners
 
 
-def run(player_RL, player_SL, out_pth, n_training_pairs, batch_size, features):
-    X_list = []
-    winners_list = []
-    colors_list = []
-    for n in xrange(n_training_pairs / batch_size):
-        X, winners, colors = play_batch(player_RL, player_SL, batch_size, features)
-        X_list.append(X)
-        winners_list.extend(winners)
-        colors_list.extend(colors)
-    # Concatenate over batches to make one HDF5 file
-    X = np.concatenate(X_list, axis=0)
-    save(out_pth, X, winners_list, colors_list)
+def run(player_RL, player_SL, out_pth, n_training_pairs, batch_size,
+        bd_size, features):
+    n_features = Preprocess(features).output_dim
+    h5_states, h5_winners = init_hdf5(out_pth, n_features,
+                                      bd_size)
+    next_idx = 0
+    n_pairs = 0
+    while True:  # n in xrange(n_training_pairs / batch_size):
+        X, winners = play_batch(player_RL, player_SL, batch_size,
+                                features)
+        if X is not None:
+            try:
+                # if next_idx >= len(h5_states):
+                h5_states.resize((next_idx + batch_size, n_features, bd_size, bd_size))
+                h5_winners.resize((next_idx + batch_size, 1))
+                h5_states[next_idx:] = X
+                h5_winners[next_idx:] = winners
+                next_idx += batch_size
+            except Exception as e:
+                warnings.warn("Unknown error occured during batch save to HDF5 "
+                    "file: {}".format(out_pth))
+                raise e
+        n_pairs += 1
+        if n_pairs >= n_training_pairs / batch_size:
+            break
     return
 
 
@@ -140,6 +158,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "--batch_size", help="Number of games to run in parallel. "
         "(Default: 2)", type=int, default=2)
+    parser.add_argument(
+        "--board_size", help="Board size (int). "
+        "(Default: 19)", type=int, default=19)
     args = parser.parse_args()
 
     # Load architecture and weights from file
@@ -154,4 +175,4 @@ if __name__ == '__main__':
     player_RL = ProbabilisticPolicyPlayer(policy_RL)
     player_SL = ProbabilisticPolicyPlayer(policy_SL)
     run(player_RL, player_SL, args.out_pth, args.n_training_pairs,
-        args.batch_size, features)
+        args.batch_size, args.board_size, features)
