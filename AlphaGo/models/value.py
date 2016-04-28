@@ -2,7 +2,7 @@ from AlphaGo.preprocessing.preprocessing import Preprocess
 import json
 import keras.backend as K
 from keras.layers import convolutional, Dense
-from keras.layers.core import Activation, Flatten
+from keras.layers.core import Flatten
 from keras.models import Sequential, model_from_json
 
 

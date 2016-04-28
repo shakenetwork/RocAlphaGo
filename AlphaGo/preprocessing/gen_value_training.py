@@ -14,14 +14,14 @@ def save(out_pth, X, winners_list, colors_list):
     tmp_file = os.path.join(os.path.dirname(out_pth), ".tmp." + os.path.basename(out_pth))
     f = h5py.File(tmp_file, 'w')
     try:
-        states = f.create_dataset(
+        f.create_dataset(
             'states',
             dtype=np.uint8,
             chunks=(min(64, X.shape[0]),) + X.shape[1:],      # approximately 1MB chunks
             compression="lzf",
             data=X)
-        winners = f.create_dataset('winners', data=winners_list)
-        colors = f.create_dataset('colors', data=colors_list)
+        f.create_dataset('winners', data=winners_list)
+        f.create_dataset('colors', data=colors_list)
         f.close()
         os.rename(tmp_file, out_pth)
     except Exception as e:
