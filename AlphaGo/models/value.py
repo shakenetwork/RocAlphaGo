@@ -30,8 +30,7 @@ class CNNValue(object):
         """Construct a function using the current keras backend that, when given a batch
         of inputs, simply processes them forward and returns the output
 
-        The output has size (batch x 361) for 19x19 boards (i.e. the output is a batch
-        of distributions over flattened boards. See AlphaGo.util#flatten_idx)
+        The output has size (batch x 1); one value per input board
 
         This is as opposed to model.compile(), which takes a loss function
         and training method.
@@ -44,17 +43,13 @@ class CNNValue(object):
         # the first [0] gets the front tensor.
         return lambda inpt: forward_function([inpt])[0]
 
-    def eval_state(self, state, moves=None):
-        """Given a GameState object, returns a list of (action, probability) pairs
-        according to the network outputs
-
-        If a list of moves is specified, only those moves are kept in the distribution
+    def eval_state(self, state):
+        """Given a GameState object, returns a value
         """
         tensor = self.preprocessor.state_to_tensor(state)
         # run the tensor through the network
         network_output = self.forward(tensor)
-        moves = moves or state.get_legal_moves()
-        return self._select_moves_and_normalize(network_output[0], moves, state.size)
+        return network_output[0]
 
     @staticmethod
     def create_network(**kwargs):
@@ -149,31 +144,3 @@ class CNNValue(object):
         # use the json module to write object_specs to file
         with open(json_file, 'w') as f:
             json.dump(object_specs, f)
-
-    # def __init__(self):
-    #     self.model = Sequential()
-    #     self.model.add(convolutional.Convolution2D(
-    #         input_shape=(49, 19, 19), nb_filter=K, nb_row=5, nb_col=5,
-    #         init='uniform', activation='relu', border_mode='same'))
-    #     for i in range(2, 13):
-    #         self.model.add(convolutional.Convolution2D(
-    #             nb_filter=K, nb_row=3, nb_col=3,
-    #             init='uniform', activation='relu', border_mode='same'))
-
-    #     self.model.add(convolutional.Convolution2D(
-    #         nb_filter=1, nb_row=1, nb_col=1,
-    #         init='uniform', activation='linear', border_mode='same'))
-    #     self.model.add(Flatten())
-    #     self.model.add(Dense(256, init='uniform'))
-    #     self.model.add(Dense(1, init='uniform', activation="tanh"))
-
-    #     # sgd = SGD(lr=LEARNING_RATE, decay=DECAY)
-    #     # self.model.compile(loss='mean_squared_error', optimizer=sgd)
-
-    # def get_samples(self):
-    #     # TODO non-terminating loop that draws training samples uniformly at random
-    #     pass
-
-    # def train(self):
-    #     # TODO use self.model.fit_generator to train from data source
-    #     pass
