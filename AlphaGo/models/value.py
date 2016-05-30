@@ -56,7 +56,7 @@ class CNNValue(NeuralNetBase):
             activation='relu',
             border_mode='same'))
 
-        # create all other layers
+        # create all other layers (by default, this creates layers 2 through 12)
         # TODO: penultimate layer different in some way?
         for i in range(2, params["layers"] + 1):
             # use filter_width_K if it is there, otherwise use 3
@@ -79,6 +79,6 @@ class CNNValue(NeuralNetBase):
             activation='relu',
             border_mode='same'))
         network.add(Flatten())
-        network.add(Dense(256, init='uniform'))
+        network.add(Dense(256, init='uniform', activation='relu'))
         network.add(Dense(1, init='uniform', activation="tanh"))
         return network
